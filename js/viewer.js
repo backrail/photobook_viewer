@@ -116,7 +116,7 @@ async function init() {
 
 
   // ----------------------------------------------------
-  // ④ 拡大オーバーレイ（画像全体が見切れない contain） ★ 修正箇所
+  // ④ 拡大オーバーレイ（画像全体が見切れない contain）
   // ----------------------------------------------------
   if (!document.getElementById("zoom-overlay")) {
     const overlay = document.createElement("div");
@@ -133,10 +133,17 @@ async function init() {
       pointer-events: auto; /* イベントを受け取ることを明示 */
     `;
 
-    // ★ 修正点1: 拡大表示中に下のフリップブックにイベントが伝わるのを防ぐ
-    overlay.addEventListener('mousedown', (e) => { e.stopPropagation(); });
-    overlay.addEventListener('touchstart', (e) => { e.stopPropagation(); });
-    overlay.addEventListener('click', (e) => { e.stopPropagation(); });
+    // ★ 修正箇所: 拡大表示中に下のフリップブックにイベントが伝わるのを徹底的に防ぐ
+    const stopProp = (e) => {
+      e.stopImmediatePropagation();
+      e.preventDefault();
+    };
+
+    // mousedown, touchstart, click, touchend のすべてをブロック
+    overlay.addEventListener('mousedown', stopProp);
+    overlay.addEventListener('touchstart', stopProp);
+    overlay.addEventListener('click', stopProp);
+    overlay.addEventListener('touchend', stopProp);
 
     const img = document.createElement("img");
     img.id = "zoom-img";
