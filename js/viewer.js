@@ -116,7 +116,7 @@ async function init() {
 
 
   // ----------------------------------------------------
-  // ④ 拡大オーバーレイ（画像全体が見切れない contain）
+  // ④ 拡大オーバーレイ（画像全体が見切れない contain） ★ 修正箇所
   // ----------------------------------------------------
   if (!document.getElementById("zoom-overlay")) {
     const overlay = document.createElement("div");
@@ -130,7 +130,13 @@ async function init() {
       align-items: center;
       z-index: 9999;
       padding: 16px;
+      pointer-events: auto; /* イベントを受け取ることを明示 */
     `;
+
+    // ★ 修正点1: 拡大表示中に下のフリップブックにイベントが伝わるのを防ぐ
+    overlay.addEventListener('mousedown', (e) => { e.stopPropagation(); });
+    overlay.addEventListener('touchstart', (e) => { e.stopPropagation(); });
+    overlay.addEventListener('click', (e) => { e.stopPropagation(); });
 
     const img = document.createElement("img");
     img.id = "zoom-img";
@@ -163,6 +169,7 @@ async function init() {
       (overlay.style.display = "none");
 
     overlay.onclick = (e) => {
+      // オーバーレイ自体をクリックした場合に閉じる（画像やボタンクリックは除く）
       if (e.target === overlay)
         overlay.style.display = "none";
     };
@@ -294,11 +301,10 @@ async function init() {
 
       const t = e.touches[0];
 
-      // ★ 修正点: lastPressEvent を座標情報のみの標準オブジェクトとして保存
+      // lastPressEvent を座標情報のみの標準オブジェクトとして保存
       lastPressEvent = {
         clientX: t.clientX,
         clientY: t.clientY,
-        // getClickedPageIndexが touches プロパティを見ないように null を設定
         touches: null
       };
 
