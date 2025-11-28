@@ -2,6 +2,9 @@ document.addEventListener("DOMContentLoaded", init);
 
 async function init() {
 
+  // ★ 修正点1: 長押し後のクリックをブロックするためのフラグを追加
+  let blockPageTurnClick = false;
+
   // ----------------------------------------------------
   // ① ページ画像の自動ロード
   // ----------------------------------------------------
@@ -30,7 +33,7 @@ async function init() {
   }
 
   // ----------------------------------------------------
-  // ② 画面フィット（90%）
+  // ② 画面フィット（常に90%余白）
   // ----------------------------------------------------
   function calcBookSize() {
     const vw = window.innerWidth;
@@ -72,30 +75,48 @@ async function init() {
   });
 
 
+  // ----------------------------------------------------------
+  // ③ PC：右クリックをページめくりから完全に除外
+  // ----------------------------------------------------------
+  flipBookElement.addEventListener(
+    "mousedown",
+    (e) => {
+      if (e.button === 2) {
+        e.stopImmediatePropagation();
+        e.preventDefault();
+      }
+    },
+    true
+  );
+
+  flipBookElement.addEventListener(
+    "click",
+    (e) => {
+      // ★ 修正点2: 長押しによって発生したクリックをブロック
+      if (blockPageTurnClick) {
+        blockPageTurnClick = false; // フラグをリセット
+        e.stopImmediatePropagation();
+        e.preventDefault();
+        return;
+      }
+
+      if (e.button === 2) {
+        e.stopImmediatePropagation();
+        e.preventDefault();
+      }
+    },
+    true
+  );
+
+  flipBookElement.addEventListener(
+    "contextmenu",
+    (e) => e.preventDefault(),
+    true
+  );
+
+
   // ----------------------------------------------------
-  // ③ PC: 右クリック → 完全無効（ページめくりさせない）
-  // ----------------------------------------------------
-  flipBookElement.addEventListener("mousedown", (e) => {
-    if (e.button === 2) {
-      e.stopImmediatePropagation();
-      e.preventDefault();
-    }
-  }, true);
-
-  flipBookElement.addEventListener("click", (e) => {
-    if (e.button === 2) {
-      e.stopImmediatePropagation();
-      e.preventDefault();
-    }
-  }, true);
-
-  flipBookElement.addEventListener("contextmenu", (e) => {
-    e.preventDefault();
-  }, true);
-
-
-  // ----------------------------------------------------
-  // ④ 拡大ビュー（オーバーレイ）
+  // ④ 拡大オーバーレイ（画像全体が見切れない contain）
   // ----------------------------------------------------
   if (!document.getElementById("zoom-overlay")) {
     const overlay = document.createElement("div");
@@ -108,6 +129,7 @@ async function init() {
       justify-content: center;
       align-items: center;
       z-index: 9999;
+      padding: 16px;
     `;
 
     const img = document.createElement("img");
@@ -122,7 +144,6 @@ async function init() {
     `;
 
     const closeBtn = document.createElement("div");
-    closeBtn.id = "zoom-close";
     closeBtn.innerText = "✕";
     closeBtn.style.cssText = `
       position: fixed;
@@ -131,72 +152,187 @@ async function init() {
       color: white;
       font-size: 32px;
       cursor: pointer;
+      z-index: 10000;
     `;
 
     overlay.appendChild(img);
     overlay.appendChild(closeBtn);
     document.body.appendChild(overlay);
 
-    closeBtn.onclick = () => overlay.style.display = "none";
+    closeBtn.onclick = () =>
+      (overlay.style.display = "none");
+
     overlay.onclick = (e) => {
-      if (e.target === overlay) overlay.style.display = "none";
+      if (e.target === overlay)
+        overlay.style.display = "none";
     };
   }
 
 
   // ----------------------------------------------------
-  // ⑤ 押した位置からページ判定
+  // ⑤ 拡大メニュー（右クリック & 長押し）
   // ----------------------------------------------------
+  const menu = document.createElement("div");
+  menu.id = "zoom-menu";
+  menu.style.cssText = `
+    position: fixed;
+    display: none;
+    background: rgba(30,30,30,0.96);
+    color: white;
+    padding: 12px 16px;
+    border-radius: 8px;
+    z-index: 9999;
+    font-size: 16px;
+    cursor: pointer;
+  `;
+  menu.innerText = "🔍 拡大して見る";
+  document.body.appendChild(menu);
+
+
+  // ----------------------------------------------------
+  // ⑥ 左右ページ判定（押したページを拡大）
+  // ----------------------------------------------------
+  let lastPressEvent = null;
+
   function getClickedPageIndex(event) {
     const rect = flipBookElement.getBoundingClientRect();
+    // touch event の場合は touches[0] を使用
     const clientX =
       (event.touches?.[0]?.clientX ?? event.clientX) - rect.left;
 
     const mid = rect.width / 2;
-    const left = flip.getCurrentPageIndex();
-    const right = left + 1;
+    // flip.getCurrentPageIndex() は見開きの左側のページインデックス（表紙は 0）
+    const leftPage = flip.getCurrentPageIndex();
+    const rightPage = leftPage + 1;
 
-    return clientX < mid ? left : right;
+    // 中央より左なら左ページ、右なら右ページのインデックスを返す
+    return clientX < mid ? leftPage : rightPage;
   }
 
 
   // ----------------------------------------------------
-  // ⑥ 長押しで即拡大（ボタンなし）
+  // ⑦ メニュークリック → 押した側のページを拡大
   // ----------------------------------------------------
-  let isLongPress = false;
-  let pressTimer = null;
+  menu.onclick = () => {
+
+    // 押した側の pageFlipIndex を取得
+    let pageFlipIndex = getClickedPageIndex(lastPressEvent);
+
+    // PageFlipIndex → pages[] index に変換
+    let realIndex = pageFlipIndex;
+
+    // 表紙が開かれている場合は、クリック位置に関わらず必ず pages[0] (表紙)を拡大する
+    if (flip.getCurrentPageIndex() === 0) {
+      realIndex = 0;
+    }
+    // それ以外のケース（見開きページ）で、インデックスが負の値になることは通常ないが、
+    // 安全のため、最小値は 0 とする
+    else if (realIndex < 0) {
+      realIndex = 0;
+    }
+
+    // 拡大ビューに反映
+    document.getElementById("zoom-img").src = pages[realIndex];
+    document.getElementById("zoom-overlay").style.display = "flex";
+    menu.style.display = "none";
+  };
+
+
+
+  // ----------------------------------------------------
+  // ⑧ PC：右クリックでメニュー出す
+  // ----------------------------------------------------
+  flipBookElement.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+
+    // クリックされたページが空白領域でないかチェック
+    const rect = flipBookElement.getBoundingClientRect();
+    const clientX = e.clientX - rect.left;
+    const mid = rect.width / 2;
+
+    // 現在のページインデックスが 0 のとき（表紙見開き）
+    if (flip.getCurrentPageIndex() === 0) {
+      // 左半分 (clientX < mid) をクリックした場合、それは空白部分と見なす
+      if (clientX < mid) {
+        return;
+      }
+    }
+
+    // 有効なページ上でクリックされた場合のみ、メニューを表示
+    lastPressEvent = e;
+    menu.style.left = `${e.clientX}px`;
+    menu.style.top = `${e.clientY}px`;
+    menu.style.display = "block";
+  });
+
+
+  // ----------------------------------------------------
+  // ⑨ スマホ：タップ/長押し判定（誤動作ゼロ）
+  // ----------------------------------------------------
+  let touchStartTime = 0;
+  let longPressTriggered = false;
+  let pressTimer;
 
   flipBookElement.addEventListener("touchstart", (e) => {
-    isLongPress = false;
+    touchStartTime = Date.now();
+    longPressTriggered = false;
+
+    // タッチ位置が表紙の左側（空白）かどうかをチェック
+    const rect = flipBookElement.getBoundingClientRect();
+    const clientX = e.touches[0].clientX - rect.left;
+    const mid = rect.width / 2;
+
+    // 現在のページインデックスが 0 のとき（表紙見開き）
+    if (flip.getCurrentPageIndex() === 0) {
+      // 左半分 (clientX < mid) をタップした場合、長押し判定をスキップする
+      if (clientX < mid) {
+        return;
+      }
+    }
 
     pressTimer = setTimeout(() => {
-      isLongPress = true;
+      longPressTriggered = true;
+      lastPressEvent = e;
 
-      const flipIndex = getClickedPageIndex(e);
-      let realIndex = flipIndex;
-      if (realIndex < 0) realIndex = -1;
-
-      document.getElementById("zoom-img").src = pages[realIndex];
-      document.getElementById("zoom-overlay").style.display = "flex";
-
-    }, 500);
+      const t = e.touches[0];
+      menu.style.left = `${t.clientX}px`;
+      menu.style.top = `${t.clientY}px`;
+      menu.style.display = "block";
+    }, 500); // 長押し検出
   });
 
   flipBookElement.addEventListener("touchend", (e) => {
     clearTimeout(pressTimer);
 
-    if (isLongPress) {
+    const elapsed = Date.now() - touchStartTime;
+
+    if (longPressTriggered) {
+      // ★ 修正点3: 長押し → ページめくり禁止 + 次のクリックも禁止
       e.stopImmediatePropagation();
       e.preventDefault();
+
+      // 長押し後に発生する synthetic click をブロックするためのフラグを設定
+      blockPageTurnClick = true;
+
       return;
     }
+
+    if (elapsed < 300) {
+      // ★ タップ → 通常のページめくり（PageFlipに任せる）
+      return;
+    }
+
+    // ★ 中途半端な押し（300〜500ms）は何もしない
+    e.preventDefault();
+    e.stopImmediatePropagation();
   });
 
-  flipBookElement.addEventListener("touchmove", (e) => {
-    if (isLongPress) {
-      e.stopImmediatePropagation();
-      e.preventDefault();
-    }
-  }, true);
 
+  // ----------------------------------------------------
+  // ⑩ メニュー外クリックで閉じる
+  // ----------------------------------------------------
+  document.addEventListener("click", (e) => {
+    if (e.target !== menu)
+      menu.style.display = "none";
+  });
 }
