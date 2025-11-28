@@ -1,4 +1,3 @@
-
 document.addEventListener("DOMContentLoaded", init);
 
 async function init() {
@@ -33,7 +32,7 @@ async function init() {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
 
-    // 縦横比（元の 800x1200 = 2:3）
+    // 縦横比（800x1200 = 2:3）
     const baseRatio = 800 / 1200;
 
     let width = vw;
@@ -54,7 +53,7 @@ async function init() {
     height: size.height,
     size: "stretch",
     maxShadowOpacity: 0.9,
-    showCover: true,            // 最初と最後のページをハードカバー扱い
+    showCover: true,
     drawShadow: true,
     mobileScrollSupport: true
   });
@@ -65,4 +64,66 @@ async function init() {
     const newSize = calcBookSize();
     flip.update(newSize.width, newSize.height);
   });
+
+  // ---------------------------------------------
+  // ⭐ ここから「ページ拡大表示」追加機能
+  // ---------------------------------------------
+
+  // 拡大ビュー用のDOMを追加（なければ作成）
+  if (!document.getElementById("zoom-overlay")) {
+    const overlay = document.createElement("div");
+    overlay.id = "zoom-overlay";
+    overlay.style.cssText = `
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.9);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+      padding: 20px;
+    `;
+
+    const img = document.createElement("img");
+    img.id = "zoom-img";
+    img.style.cssText = `
+      width: 100%;
+      height: auto;
+      max-width: 900px;
+    `;
+
+    const closeBtn = document.createElement("div");
+    closeBtn.id = "zoom-close";
+    closeBtn.innerText = "✕";
+    closeBtn.style.cssText = `
+      position: fixed;
+      top: 15px;
+      right: 20px;
+      color: white;
+      font-size: 32px;
+      cursor: pointer;
+      z-index: 10000;
+    `;
+
+    overlay.appendChild(img);
+    overlay.appendChild(closeBtn);
+    document.body.appendChild(overlay);
+
+    closeBtn.onclick = () => {
+      overlay.style.display = "none";
+    };
+    overlay.onclick = (e) => {
+      if (e.target === overlay) overlay.style.display = "none";
+    };
+  }
+
+  // ⭐ ページクリック → 拡大表示
+  document.getElementById("flip-book").addEventListener("click", () => {
+    const current = flip.getCurrentPageIndex();
+    const imgUrl = pages[current];
+
+    document.getElementById("zoom-img").src = imgUrl;
+    document.getElementById("zoom-overlay").style.display = "flex";
+  });
+
 }
