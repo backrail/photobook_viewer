@@ -2,7 +2,7 @@ document.addEventListener("DOMContentLoaded", init);
 
 async function init() {
 
-  // ★ 修正点1: 長押し後のクリックをブロックするためのフラグを追加
+  // 長押し後のクリックをブロックするためのフラグ
   let blockPageTurnClick = false;
 
   // ----------------------------------------------------
@@ -92,7 +92,7 @@ async function init() {
   flipBookElement.addEventListener(
     "click",
     (e) => {
-      // ★ 修正点2: 長押しによって発生したクリックをブロック
+      // 長押しによって発生したクリックをブロック
       if (blockPageTurnClick) {
         blockPageTurnClick = false; // フラグをリセット
         e.stopImmediatePropagation();
@@ -196,7 +196,7 @@ async function init() {
 
   function getClickedPageIndex(event) {
     const rect = flipBookElement.getBoundingClientRect();
-    // touch event の場合は touches[0] を使用
+    // event.touches が存在しない場合は event.clientX を使用
     const clientX =
       (event.touches?.[0]?.clientX ?? event.clientX) - rect.left;
 
@@ -218,7 +218,6 @@ async function init() {
     // 押した側の pageFlipIndex を取得
     let pageFlipIndex = getClickedPageIndex(lastPressEvent);
 
-    // PageFlipIndex → pages[] index に変換
     let realIndex = pageFlipIndex;
 
     // 表紙が開かれている場合は、クリック位置に関わらず必ず pages[0] (表紙)を拡大する
@@ -292,9 +291,17 @@ async function init() {
 
     pressTimer = setTimeout(() => {
       longPressTriggered = true;
-      lastPressEvent = e;
 
       const t = e.touches[0];
+
+      // ★ 修正点: lastPressEvent を座標情報のみの標準オブジェクトとして保存
+      lastPressEvent = {
+        clientX: t.clientX,
+        clientY: t.clientY,
+        // getClickedPageIndexが touches プロパティを見ないように null を設定
+        touches: null
+      };
+
       menu.style.left = `${t.clientX}px`;
       menu.style.top = `${t.clientY}px`;
       menu.style.display = "block";
@@ -307,7 +314,7 @@ async function init() {
     const elapsed = Date.now() - touchStartTime;
 
     if (longPressTriggered) {
-      // ★ 修正点3: 長押し → ページめくり禁止 + 次のクリックも禁止
+      // 長押し → ページめくり禁止 + 次のクリックも禁止
       e.stopImmediatePropagation();
       e.preventDefault();
 
@@ -318,11 +325,11 @@ async function init() {
     }
 
     if (elapsed < 300) {
-      // ★ タップ → 通常のページめくり（PageFlipに任せる）
+      // タップ → 通常のページめくり（PageFlipに任せる）
       return;
     }
 
-    // ★ 中途半端な押し（300〜500ms）は何もしない
+    // 中途半端な押し（300〜500ms）は何もしない
     e.preventDefault();
     e.stopImmediatePropagation();
   });
